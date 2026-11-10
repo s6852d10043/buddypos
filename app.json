@@ -1,7 +1,8 @@
 {
   "expo": {
-    "name": "buddypos",
+    "name": "BuddyPOS",
     "slug": "buddypos",
+    "scheme": "buddypos",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -13,17 +14,37 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.buddypos.app"
     },
     "android": {
+      "package": "com.buddypos.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#4F46E5"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "ขออนุญาตใช้งานกล้องถ่ายรูปเพื่อสแกน QR Code"
+        }
+      ],
+      "expo-web-browser"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "698d23a6-bade-49ac-be04-41597fe8319f"
+      }
     }
   }
 }
