@@ -14,9 +14,9 @@ import {
   ActivityIndicator,
   Modal,
   Image,
+  Share,
 } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
-import * as Sharing from 'expo-sharing';
 import * as Clipboard from 'expo-clipboard';
 import { supabase } from '../lib/supabase';
 import Icon from '../theme/Icon';
@@ -276,13 +276,13 @@ export default function StaffQrScreen({ store, onBack }) {
         document.body.removeChild(link);
       } else {
         try {
-          await Sharing.shareAsync(finalImageBase64, {
-            mimeType: 'image/png',
-            dialogTitle: `บันทึก QR พนักงาน - ${restaurantName}`,
+          await Share.share({
+            title: `QR พนักงาน - ${restaurantName}`,
+            message: `ลิงก์เข้าสู่ระบบพนักงานร้าน ${restaurantName}\n\nคลิกลิงก์เพื่อเข้างาน:\n${qrUrl}\n\nรหัส Token พนักงาน: ${staffToken || ''}`,
           });
         } catch (error) {
-          console.error('Save QR Error:', error);
-          Alert.alert('เกิดข้อผิดพลาด', 'ไม่สามารถบันทึกรูปภาพได้');
+          console.error('Share QR Error:', error);
+          Alert.alert('เกิดข้อผิดพลาด', 'ไม่สามารถแชร์ข้อมูลได้');
         }
       }
     });

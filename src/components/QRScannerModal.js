@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, Text, View, Modal, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, Camera } from 'expo-camera';
 import Icon from '../theme/Icon';
 import { colors, spacing, radius, fontSize, shadow } from '../theme';
@@ -62,10 +63,10 @@ export default function QRScannerModal({ visible, onClose, onScanSuccess }) {
   if (hasPermission === null) {
     return (
       <Modal visible={visible} animationType="slide">
-        <View style={styles.centerContainer}>
+        <SafeAreaView style={styles.centerContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.permissionText, { marginTop: 16 }]}>กำลังเปิดใช้งานกล้อง...</Text>
-        </View>
+        </SafeAreaView>
       </Modal>
     );
   }
@@ -73,7 +74,7 @@ export default function QRScannerModal({ visible, onClose, onScanSuccess }) {
   if (hasPermission === false) {
     return (
       <Modal visible={visible} animationType="slide">
-        <View style={styles.centerContainer}>
+        <SafeAreaView style={styles.centerContainer}>
           <View style={styles.permissionCard}>
             <View style={styles.permissionIcon}>
               <Icon name="camera-outline" size={32} color={colors.textFaint} />
@@ -83,14 +84,14 @@ export default function QRScannerModal({ visible, onClose, onScanSuccess }) {
               <Text style={styles.primaryBtnText}>ปิดหน้าต่าง</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </SafeAreaView>
       </Modal>
     );
   }
 
   return (
     <Modal visible={visible} animationType="slide">
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
         <CameraView
           onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
           barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
@@ -104,7 +105,7 @@ export default function QRScannerModal({ visible, onClose, onScanSuccess }) {
             <Text style={styles.closeBtnText}>ยกเลิก</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 }

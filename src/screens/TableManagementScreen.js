@@ -14,8 +14,10 @@ import {
   ActivityIndicator,
   Modal,
   Image,
+  Share,
 } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
+import * as Clipboard from 'expo-clipboard';
 import { supabase } from '../lib/supabase';
 import Icon from '../theme/Icon';
 import { colors, spacing, radius, fontSize, shadow } from '../theme';
@@ -67,6 +69,45 @@ export default function TableManagementScreen({ store, onBack }) {
     return Math.random().toString(36).substring(2, 10) + Date.now().toString(36).slice(-4);
   };
 
+  // จัดรูปแบบชื่อโต๊ะให้เป็นมาตรฐานเดียวกัน (เช่น แก้คำพิมพ์ผิด "โต็ะ" -> "โต๊ะ", "โต๊ะ1" -> "โต๊ะ 1", "1" -> "โต๊ะ 1")
+  const formatTableDisplayName = (raw) => {
+    let cleaned = (raw || '')
+      .trim()
+      .replace(/โต็ะ/g, 'โต๊ะ')
+      .replace(/\s+/g, ' ');
+    if (/^\d+$/.test(cleaned)) {
+      return `โต๊ะ ${parseInt(cleaned, 10)}`;
+    }
+    const matchThaiTable = cleaned.match(/^โต๊ะ\s*(\d+)$/);
+    if (matchThaiTable) {
+      return `โต๊ะ ${parseInt(matchThaiTable[1], 10)}`;
+    }
+    return cleaned;
+  };
+
+  // คีย์เปรียบเทียบชื่อโต๊ะแบบไม่สนเว้นวรรค ตัวพิมพ์เล็ก-ใหญ่ หรือคำพิมพ์ผิด "โต็ะ"
+  const getTableComparisonKey = (raw) => {
+    return formatTableDisplayName(raw)
+      .replace(/\s+/g, '')
+      .toLowerCase();
+  };
+
+  // ดึงเลขประจำโต๊ะ (เช่น "โต๊ะ 1", "โต๊ะ1", "โต็ะ 1", "1" -> 1) เพื่อป้องกันเลขโต๊ะชนกันในร้านเดียวกัน
+  const getTableNumericId = (raw) => {
+    const cleaned = (raw || '').trim().replace(/โต็ะ/g, 'โต๊ะ');
+    const match = cleaned.match(/^(?:โต๊ะ|table|t)?\s*(\d+)$/i);
+    return match ? parseInt(match[1], 10) : null;
+  };
+
+  const sortTablesNaturally = (list) => {
+    return [...(list || [])].sort((a, b) => {
+      const numA = parseInt((a.table_number || '').replace(/\D/g, '') || '999999', 10);
+      const numB = parseInt((b.table_number || '').replace(/\D/g, '') || '999999', 10);
+      if (numA !== numB) return numA - numB;
+      return (a.table_number || '').localeCompare(b.table_number || '', 'th');
+    });
+  };
+
   const getTableUrl = (table) => {
     if (!table) return '';
     const token = table.qr_token || table.id;
@@ -113,7 +154,7 @@ export default function TableManagementScreen({ store, onBack }) {
 
       if (error) throw error;
       if (isMountedRef.current) {
-        setTables(data || []);
+        setTables(sortTablesNaturally(data || []));
       }
     } catch (error) {
       console.error('Fetch Tables Error:', error);
@@ -167,36 +208,63 @@ export default function TableManagementScreen({ store, onBack }) {
     }
   };
 
+  const findDuplicateTable = (candidateName, tableList, ignoreId = null) => {
+    const targetKey = getTableComparisonKey(candidateName);
+    const targetNum = getTableNumericId(candidateName);
+
+    return (tableList || []).find((t) => {
+      if (ignoreId && t.id === ignoreId) return false;
+      const existingKey = getTableComparisonKey(t.table_number);
+      if (existingKey === targetKey) return true;
+      const existingNum = getTableNumericId(t.table_number);
+      if (targetNum !== null && existingNum !== null && targetNum === existingNum) {
+        return true;
+      }
+      return false;
+    });
+  };
+
   const handleSaveSingleTable = async () => {
     if (isSavingTableRef.current) return;
 
-    const trimmed = tableNumber.trim();
-    if (!trimmed) {
+    const normalizedName = formatTableDisplayName(tableNumber);
+    if (!normalizedName) {
       const msg = 'กรุณากรอกชื่อหรือหมายเลขโต๊ะ';
       if (Platform.OS === 'web') alert(msg);
       else Alert.alert('คำเตือน', msg);
       return;
     }
 
-    const isDuplicate = tables.some((t) => {
-      if (editingTable && t.id === editingTable.id) return false;
-      return (t.table_number || '').trim().toLowerCase() === trimmed.toLowerCase();
-    });
-
-    if (isDuplicate) {
-      const msg = `หมายเลขหรือชื่อโต๊ะ "${trimmed}" มีอยู่ในระบบแล้ว กรุณาใช้ชื่ออื่น`;
+    const localDup = findDuplicateTable(normalizedName, tables, editingTable?.id);
+    if (localDup) {
+      const msg = `โต๊ะ "${normalizedName}" ซ้ำกับ "${localDup.table_number}" ที่มีอยู่ในร้านแล้ว กรุณาใช้ชื่อหรือหมายเลขอื่น`;
       if (Platform.OS === 'web') alert(msg);
-      else Alert.alert('ชื่อโต๊ะซ้ำ', msg);
+      else Alert.alert('ชื่อโต๊ะซ้ำในร้าน', msg);
       return;
     }
 
     try {
       isSavingTableRef.current = true;
       setSubmitting(true);
+
+      // ตรวจสอบซ้ำกับฐานข้อมูลล่าสุดของร้านนี้อีกชั้นก่อนบันทึก
+      const { data: latestTables } = await supabase
+        .from('tables')
+        .select('id, table_number')
+        .eq('restaurant_id', restaurantId);
+
+      const dbDup = findDuplicateTable(normalizedName, latestTables || tables, editingTable?.id);
+      if (dbDup) {
+        const msg = `โต๊ะ "${normalizedName}" ซ้ำกับ "${dbDup.table_number}" ที่มีอยู่ในร้านแล้ว กรุณาใช้ชื่อหรือหมายเลขอื่น`;
+        if (Platform.OS === 'web') alert(msg);
+        else Alert.alert('ชื่อโต๊ะซ้ำในร้าน', msg);
+        return;
+      }
+
       if (editingTable) {
         const { error } = await supabase
           .from('tables')
-          .update({ table_number: trimmed })
+          .update({ table_number: normalizedName })
           .eq('id', editingTable.id);
 
         if (error) throw error;
@@ -204,7 +272,7 @@ export default function TableManagementScreen({ store, onBack }) {
         const { error } = await supabase.from('tables').insert([
           {
             restaurant_id: restaurantId,
-            table_number: trimmed,
+            table_number: normalizedName,
             status: 'available',
             qr_token: generateUniqueToken(),
           },
@@ -244,17 +312,32 @@ export default function TableManagementScreen({ store, onBack }) {
     try {
       isBulkAddingRef.current = true;
       setSubmitting(true);
-      const currentTotal = tables.length;
-      const newTables = [];
 
-      for (let i = 1; i <= count; i++) {
-        const nextNumber = currentTotal + i;
-        newTables.push({
-          restaurant_id: restaurantId,
-          table_number: `${prefix}${nextNumber}`,
-          status: 'available',
-          qr_token: generateUniqueToken(),
-        });
+      const { data: latestTables } = await supabase
+        .from('tables')
+        .select('id, table_number')
+        .eq('restaurant_id', restaurantId);
+
+      const currentTables = latestTables || tables || [];
+      const cleanPrefix = (prefix || 'โต๊ะ ').replace(/โต็ะ/g, 'โต๊ะ');
+      const newTables = [];
+      const simulatedList = [...currentTables];
+      let candidateNum = 1;
+
+      while (newTables.length < count && candidateNum <= 5000) {
+        const candidateName = formatTableDisplayName(`${cleanPrefix}${candidateNum}`);
+        const conflict = findDuplicateTable(candidateName, simulatedList);
+        if (!conflict) {
+          const newEntry = {
+            restaurant_id: restaurantId,
+            table_number: candidateName,
+            status: 'available',
+            qr_token: generateUniqueToken(),
+          };
+          newTables.push(newEntry);
+          simulatedList.push(newEntry);
+        }
+        candidateNum++;
       }
 
       const { error } = await supabase.from('tables').insert(newTables);
@@ -379,13 +462,21 @@ export default function TableManagementScreen({ store, onBack }) {
     }
   };
 
-  const copyTableUrl = (table) => {
+  const copyTableUrl = async (table) => {
     const url = getTableUrl(table);
-    if (Platform.OS === 'web' && navigator?.clipboard) {
-      navigator.clipboard.writeText(url);
-      alert('คัดลอกลิงก์เรียบร้อยแล้ว!');
-    } else {
-      Alert.alert('สำเร็จ', 'คัดลอกลิงก์เรียบร้อยแล้ว!');
+    if (!url) return;
+    try {
+      if (Platform.OS === 'web' && navigator?.clipboard) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        await Clipboard.setStringAsync(url);
+      }
+      const msg = 'คัดลอกลิงก์ประจำโต๊ะเรียบร้อยแล้ว!';
+      if (Platform.OS === 'web') alert(msg);
+      else Alert.alert('สำเร็จ', msg);
+    } catch (err) {
+      console.error('Copy Table URL Error:', err);
+      Alert.alert('เกิดข้อผิดพลาด', 'ไม่สามารถคัดลอกลิงก์ได้');
     }
   };
 
@@ -530,10 +621,11 @@ export default function TableManagementScreen({ store, onBack }) {
       `);
       printWindow.document.close();
     } else {
-      Alert.alert(
-        'สั่งพิมพ์',
-        `เตรียมพิมพ์ ${selectedTables.length} โต๊ะ\nขนาด: ${wCm} x ${hCm} cm\n(ระบบพิมพ์ผ่านแอพมือถือสามารถเชื่อมต่อเครื่องพิมพ์ Thermal/Bluetooth ได้ที่นี่)`
-      );
+      const lines = selectedTables.map((t) => `${t.table_number}: ${getTableUrl(t)}`);
+      Share.share({
+        title: `QR Code โต๊ะอาหาร - ${restaurantName}`,
+        message: `ลิงก์สั่งอาหารประจำโต๊ะ (${restaurantName})\n\n${lines.join('\n\n')}`,
+      }).catch((err) => console.warn('Share tables error:', err));
     }
   };
 

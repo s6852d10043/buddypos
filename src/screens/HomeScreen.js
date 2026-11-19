@@ -114,34 +114,60 @@ export default function HomeScreen({ session, navigation, onLogout }) {
     }
   };
 
+  const base64ToArrayBuffer = (base64) => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    const clean = base64.replace(/^data:[^;]+;base64,/, '').replace(/[^A-Za-z0-9+/=]/g, '');
+    const len = clean.length;
+    let bufferLength = (len * 3) / 4;
+    if (clean[len - 1] === '=') bufferLength--;
+    if (clean[len - 2] === '=') bufferLength--;
+    const bytes = new Uint8Array(bufferLength);
+    let p = 0;
+    for (let i = 0; i < len; i += 4) {
+      const encoded1 = chars.indexOf(clean[i]);
+      const encoded2 = chars.indexOf(clean[i + 1]);
+      const encoded3 = clean[i + 2] === '=' ? 0 : chars.indexOf(clean[i + 2]);
+      const encoded4 = clean[i + 3] === '=' ? 0 : chars.indexOf(clean[i + 3]);
+      bytes[p++] = (encoded1 << 2) | (encoded2 >> 4);
+      if (clean[i + 2] !== '=') bytes[p++] = ((encoded2 & 15) << 4) | (encoded3 >> 2);
+      if (clean[i + 3] !== '=') bytes[p++] = ((encoded3 & 3) << 6) | (encoded4 & 63);
+    }
+    return bytes.buffer;
+  };
+
   // อัปโหลดรูปภาพไปยัง Supabase Storage พร้อมแปลงไฟล์เป็น .webp
   const uploadImage = async (uri) => {
     if (!uri || uri.startsWith('http')) return uri;
 
     const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.webp`;
     const filePath = `logos/${fileName}`;
-    let uploadBlob;
+    let uploadPayload;
 
     try {
       if (Platform.OS === 'web') {
-        uploadBlob = await convertToWebPOnWeb(uri);
+        uploadPayload = await convertToWebPOnWeb(uri);
       } else {
         const manipulatedImage = await ImageManipulator.manipulateAsync(
           uri,
-          [],
+          [{ resize: { width: 800 } }],
           {
             compress: 0.8,
             format: ImageManipulator.SaveFormat.WEBP,
+            base64: true,
           }
         );
 
-        const response = await fetch(manipulatedImage.uri);
-        uploadBlob = await response.blob();
+        if (manipulatedImage.base64) {
+          uploadPayload = base64ToArrayBuffer(manipulatedImage.base64);
+        } else {
+          const response = await fetch(manipulatedImage.uri);
+          uploadPayload = await response.blob();
+        }
       }
 
       const { error: uploadError } = await supabase.storage
         .from('restaurant-images')
-        .upload(filePath, uploadBlob, {
+        .upload(filePath, uploadPayload, {
           contentType: 'image/webp',
           upsert: true,
         });

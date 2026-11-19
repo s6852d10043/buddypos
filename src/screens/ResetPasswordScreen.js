@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Platform,
   ScrollView,
+  Image,
 } from "react-native";
 import { supabase } from "../lib/supabase";
 import Icon from "../theme/Icon";
@@ -129,7 +130,11 @@ export default function ResetPasswordScreen({ onComplete }) {
           {/* ส่วนหัวโลโก้เหมือนหน้า LoginScreen */}
           <View style={styles.brandHeader}>
             <View style={styles.brandLogoBox}>
-              <Icon name="restaurant-outline" size={36} color="#FFFFFF" />
+              <Image
+                source={require("../../assets/icon.png")}
+                style={styles.brandLogoImg}
+                resizeMode="cover"
+              />
             </View>
             <Text style={styles.brandTitle}>BuddyPOS</Text>
             <Text style={styles.brandSub}>ตั้งรหัสผ่านใหม่สำหรับบัญชีเจ้าของร้าน</Text>
@@ -283,14 +288,19 @@ const styles = StyleSheet.create({
     marginBottom: 28,
   },
   brandLogoBox: {
-    width: 72,
-    height: 72,
+    width: 76,
+    height: 76,
     borderRadius: 20,
     backgroundColor: colors.primary,
     justifyContent: "center",
     alignItems: "center",
+    overflow: "hidden",
     marginBottom: 16,
     ...shadow.raised,
+  },
+  brandLogoImg: {
+    width: "100%",
+    height: "100%",
   },
   brandTitle: {
     fontSize: 30,

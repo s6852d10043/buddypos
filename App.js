@@ -1,6 +1,7 @@
 // App.js
 import React, { useState, useEffect } from "react";
-import { View, Text, ActivityIndicator, StyleSheet, Platform, TouchableOpacity, SafeAreaView, StatusBar } from "react-native";
+import { View, Text, ActivityIndicator, StyleSheet, Platform, TouchableOpacity, StatusBar } from "react-native";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Linking from "expo-linking";
 import { supabase } from "./src/lib/supabase";
@@ -427,125 +428,130 @@ export default function App() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#059669" />
-      </View>
+      <SafeAreaProvider>
+        <SafeAreaView style={styles.center} edges={["top", "bottom", "left", "right"]}>
+          <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" translucent={false} />
+          <ActivityIndicator size="large" color="#059669" />
+        </SafeAreaView>
+      </SafeAreaProvider>
     );
   }
 
   return (
-    <ErrorBoundary onResetState={() => handleSelectActiveStore(null)}>
-      <SafeAreaView style={styles.appContainer}>
-        <StatusBar barStyle="dark-content" backgroundColor="#F6F7F9" />
+    <SafeAreaProvider>
+      <ErrorBoundary onResetState={() => handleSelectActiveStore(null)}>
+        <SafeAreaView style={styles.appContainer} edges={["top", "bottom", "left", "right"]}>
+          <StatusBar barStyle="dark-content" backgroundColor="#F6F7F9" translucent={false} />
 
-        {/* ส่วนเนื้อหาหลัก */}
-        <View style={styles.container}>
-          {isAdminMode ? (
-            session && session.user ? (
-              <SuperAdminScreen
-                session={session}
-                onExitAdminMode={() => {
-                  setIsAdminMode(false);
+          {/* ส่วนเนื้อหาหลัก */}
+          <View style={styles.container}>
+            {isAdminMode ? (
+              session && session.user ? (
+                <SuperAdminScreen
+                  session={session}
+                  onExitAdminMode={() => {
+                    setIsAdminMode(false);
+                    if (Platform.OS === "web" && typeof window !== "undefined") {
+                      window.history.replaceState(null, "", window.location.pathname);
+                    }
+                  }}
+                  onLogout={async () => {
+                    await supabase.auth.signOut();
+                  }}
+                />
+              ) : (
+                <LoginScreen
+                  role="super_admin"
+                  onBack={() => {
+                    setIsAdminMode(false);
+                    if (Platform.OS === "web" && typeof window !== "undefined") {
+                      window.history.replaceState(null, "", window.location.pathname);
+                    }
+                  }}
+                  onLoginSuccess={(user) => console.log("Super Admin logged in:", user?.email)}
+                />
+              )
+            ) : customerToken ? (
+              <CustomerOrderScreen
+                token={customerToken}
+                onBackToHome={() => {
+                  setCustomerToken(null);
                   if (Platform.OS === "web" && typeof window !== "undefined") {
                     window.history.replaceState(null, "", window.location.pathname);
                   }
                 }}
+              />
+            ) : isResettingPassword ? (
+              <ResetPasswordScreen
+                onComplete={async () => {
+                  setIsResettingPassword(false);
+                  await supabase.auth.signOut();
+                }}
+              />
+            ) : !selectedRole ? (
+              <RoleSelectScreen
+                onSelectOwner={() => handleSelectRole("owner")}
+                onSelectStaff={() => handleSelectRole("staff")}
+              />
+            ) : selectedRole === "staff" && !activeStore ? (
+              <StaffLoginScreen
+                onBack={() => {
+                  handleSelectRole(null);
+                  handleSelectActiveStore(null);
+                }}
+                onStaffLogin={(storeObj) => {
+                  handleSelectActiveStore(storeObj);
+                }}
+              />
+            ) : selectedRole === "staff" && activeStore ? (
+              <StaffMainScreen
+                store={activeStore}
+                onBack={() => {
+                  handleSelectActiveStore(null);
+                }}
+              />
+            ) : activeStore ? (
+              <StoreDashboard
+                store={activeStore}
+                session={session}
+                initialView={dashboardView}
+                onViewChange={handleUpdateDashboardView}
+                onBack={() => {
+                  handleSelectActiveStore(null);
+                }}
+              />
+            ) : session && session.user ? (
+              <HomeScreen
+                session={session}
+                role={selectedRole}
+                navigation={{
+                  navigate: (screen, params) => {
+                    if (screen === "StoreDashboard") {
+                      const storeObj = params?.id
+                        ? params
+                        : { id: params?.restaurantId, name: params?.restaurantName, ...params };
+                      handleUpdateDashboardView("dashboard");
+                      handleSelectActiveStore(storeObj);
+                    }
+                  },
+                }}
                 onLogout={async () => {
                   await supabase.auth.signOut();
+                  handleSelectRole(null);
+                  handleSelectActiveStore(null);
                 }}
               />
             ) : (
               <LoginScreen
-                role="super_admin"
-                onBack={() => {
-                  setIsAdminMode(false);
-                  if (Platform.OS === "web" && typeof window !== "undefined") {
-                    window.history.replaceState(null, "", window.location.pathname);
-                  }
-                }}
-                onLoginSuccess={(user) => console.log("Super Admin logged in:", user?.email)}
+                role={selectedRole}
+                onBack={() => handleSelectRole(null)}
+                onLoginSuccess={(user) => console.log("Logged in user:", user.email)}
               />
-            )
-          ) : customerToken ? (
-            <CustomerOrderScreen
-              token={customerToken}
-              onBackToHome={() => {
-                setCustomerToken(null);
-                if (Platform.OS === "web" && typeof window !== "undefined") {
-                  window.history.replaceState(null, "", window.location.pathname);
-                }
-              }}
-            />
-          ) : isResettingPassword ? (
-            <ResetPasswordScreen
-              onComplete={async () => {
-                setIsResettingPassword(false);
-                await supabase.auth.signOut();
-              }}
-            />
-          ) : !selectedRole ? (
-            <RoleSelectScreen
-              onSelectOwner={() => handleSelectRole("owner")}
-              onSelectStaff={() => handleSelectRole("staff")}
-            />
-          ) : selectedRole === "staff" && !activeStore ? (
-            <StaffLoginScreen
-              onBack={() => {
-                handleSelectRole(null);
-                handleSelectActiveStore(null);
-              }}
-              onStaffLogin={(storeObj) => {
-                handleSelectActiveStore(storeObj);
-              }}
-            />
-          ) : selectedRole === "staff" && activeStore ? (
-            <StaffMainScreen
-              store={activeStore}
-              onBack={() => {
-                handleSelectActiveStore(null);
-              }}
-            />
-          ) : activeStore ? (
-            <StoreDashboard
-              store={activeStore}
-              session={session}
-              initialView={dashboardView}
-              onViewChange={handleUpdateDashboardView}
-              onBack={() => {
-                handleSelectActiveStore(null);
-              }}
-            />
-          ) : session && session.user ? (
-            <HomeScreen
-              session={session}
-              role={selectedRole}
-              navigation={{
-                navigate: (screen, params) => {
-                  if (screen === "StoreDashboard") {
-                    const storeObj = params?.id
-                      ? params
-                      : { id: params?.restaurantId, name: params?.restaurantName, ...params };
-                    handleUpdateDashboardView("dashboard");
-                    handleSelectActiveStore(storeObj);
-                  }
-                },
-              }}
-              onLogout={async () => {
-                await supabase.auth.signOut();
-                handleSelectRole(null);
-                handleSelectActiveStore(null);
-              }}
-            />
-          ) : (
-            <LoginScreen
-              role={selectedRole}
-              onBack={() => handleSelectRole(null)}
-              onLoginSuccess={(user) => console.log("Logged in user:", user.email)}
-            />
-          )}
-        </View>
-      </SafeAreaView>
-    </ErrorBoundary>
+            )}
+          </View>
+        </SafeAreaView>
+      </ErrorBoundary>
+    </SafeAreaProvider>
   );
 }
 

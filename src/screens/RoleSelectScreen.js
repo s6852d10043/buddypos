@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image } from 'react-native';
 import Icon from '../theme/Icon';
 import { colors, spacing, radius, fontSize, shadow } from '../theme';
 
@@ -13,7 +13,11 @@ export default function RoleSelectScreen({ onSelectOwner, onSelectStaff }) {
         {/* ส่วนหัวโลโก้และชื่อแอป */}
         <View style={styles.header}>
           <View style={styles.logoBox}>
-            <Icon name="restaurant-outline" size={36} color="#FFFFFF" />
+            <Image
+              source={require('../../assets/icon.png')}
+              style={styles.logoImg}
+              resizeMode="cover"
+            />
           </View>
           <Text style={styles.appTitle}>BuddyPOS</Text>
           <Text style={styles.appSub}>ระบบจัดการร้านอาหารอัจฉริยะ</Text>
@@ -75,14 +79,19 @@ const styles = StyleSheet.create({
     marginBottom: 42, // เพิ่มระยะห่างระหว่างส่วนโลโก้กับการ์ดทั้ง 2 ใบ
   },
   logoBox: {
-    width: 72,
-    height: 72,
+    width: 76,
+    height: 76,
     borderRadius: 20,
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
     marginBottom: 16,
     ...shadow.raised,
+  },
+  logoImg: {
+    width: '100%',
+    height: '100%',
   },
   appTitle: {
     fontSize: 30,

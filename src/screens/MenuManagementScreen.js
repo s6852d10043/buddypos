@@ -100,6 +100,27 @@ export default function MenuManagementScreen({ store, onBack }) {
     }
   };
 
+  const base64ToArrayBuffer = (base64) => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    const clean = base64.replace(/^data:[^;]+;base64,/, '').replace(/[^A-Za-z0-9+/=]/g, '');
+    const len = clean.length;
+    let bufferLength = (len * 3) / 4;
+    if (clean[len - 1] === '=') bufferLength--;
+    if (clean[len - 2] === '=') bufferLength--;
+    const bytes = new Uint8Array(bufferLength);
+    let p = 0;
+    for (let i = 0; i < len; i += 4) {
+      const encoded1 = chars.indexOf(clean[i]);
+      const encoded2 = chars.indexOf(clean[i + 1]);
+      const encoded3 = clean[i + 2] === '=' ? 0 : chars.indexOf(clean[i + 2]);
+      const encoded4 = clean[i + 3] === '=' ? 0 : chars.indexOf(clean[i + 3]);
+      bytes[p++] = (encoded1 << 2) | (encoded2 >> 4);
+      if (clean[i + 2] !== '=') bytes[p++] = ((encoded2 & 15) << 4) | (encoded3 >> 2);
+      if (clean[i + 3] !== '=') bytes[p++] = ((encoded3 & 3) << 6) | (encoded4 & 63);
+    }
+    return bytes.buffer;
+  };
+
   // -------------------------------------------------------------
   // Image Processing & Uploading (WebP Conversion)
   // -------------------------------------------------------------
@@ -109,21 +130,26 @@ export default function MenuManagementScreen({ store, onBack }) {
       const manipResult = await ImageManipulator.manipulateAsync(
         uri,
         [{ resize: { width: 800 } }],
-        { compress: 0.8, format: ImageManipulator.SaveFormat.WEBP }
+        { compress: 0.8, format: ImageManipulator.SaveFormat.WEBP, base64: Platform.OS !== 'web' }
       );
 
-      // 2. แปลง Uri เป็น Blob เพื่อส่งขึ้น Supabase Storage
-      const response = await fetch(manipResult.uri);
-      const blob = await response.blob();
+      // 2. แปลงเป็น ArrayBuffer (บนมือถือ) หรือ Blob (บนเว็บ) เพื่อส่งขึ้น Supabase Storage
+      let uploadPayload;
+      if (Platform.OS !== 'web' && manipResult.base64) {
+        uploadPayload = base64ToArrayBuffer(manipResult.base64);
+      } else {
+        const response = await fetch(manipResult.uri);
+        uploadPayload = await response.blob();
+      }
 
       // 3. กำหนดชื่อไฟล์และ Path ปลายทาง
       const fileName = `menu_${Date.now()}_${Math.random().toString(36).substring(7)}.webp`;
       const filePath = `menus/${fileName}`;
 
       // 4. อัปโหลดเข้า Bucket ชื่อ 'menu-images'
-      const { data, error } = await supabase.storage
+      const { error } = await supabase.storage
         .from('menu-images')
-        .upload(filePath, blob, {
+        .upload(filePath, uploadPayload, {
           contentType: 'image/webp',
           upsert: true,
         });
@@ -209,10 +235,8 @@ export default function MenuManagementScreen({ store, onBack }) {
       // ตรวจสอบว่าเป็นรูปภาพ Local จากคลังภาพในเครื่องหรือไม่ (ถ้าใช่ ให้อัปโหลดและแปลงเป็น .webp)
       if (
         imageUrl &&
-        (imageUrl.startsWith('file://') ||
-          imageUrl.startsWith('content://') ||
-          imageUrl.startsWith('ph://') ||
-          imageUrl.startsWith('blob:'))
+        !imageUrl.startsWith('http://') &&
+        !imageUrl.startsWith('https://')
       ) {
         finalImageUrl = await uploadAndConvertImage(imageUrl);
       }

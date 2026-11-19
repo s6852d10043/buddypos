@@ -14,6 +14,7 @@ import {
   Platform,
   Modal,
   Image,
+  Vibration,
 } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { supabase } from '../lib/supabase';
@@ -25,8 +26,18 @@ import {
   calculateBillBreakdown,
 } from '../utils/promptpay';
 
-// Helper: เสียงกระดิ่งแจ้งเตือนเมื่อมีออเดอร์ใหม่เข้าครัว (Web Audio API Synthesizer)
+// Helper: เสียงกระดิ่งและสั่นแจ้งเตือนเมื่อมีออเดอร์ใหม่เข้าครัว
 const playChimeSound = () => {
+  try {
+    if (Platform.OS !== 'web') {
+      Vibration.vibrate([0, 280, 120, 350]);
+    } else if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+      navigator.vibrate([200, 100, 250]);
+    }
+  } catch (vibErr) {
+    console.warn('Vibration warning:', vibErr);
+  }
+
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
     try {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -129,6 +140,10 @@ export default function StaffMainScreen({ store, onBack }) {
   const [tableToClear, setTableToClear] = useState(null);
   const [clearingTable, setClearingTable] = useState(false);
 
+  // แบนเนอร์แจ้งเตือนเมื่อมีออเดอร์ใหม่เข้ามาแบบ Realtime
+  const [newOrderBanner, setNewOrderBanner] = useState(null);
+  const newOrderTimerRef = useRef(null);
+
   const prevOrdersCountRef = useRef(0);
   const kickedOutRef = useRef(false);
   const isMountedRef = useRef(true);
@@ -143,6 +158,9 @@ export default function StaffMainScreen({ store, onBack }) {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
+      if (newOrderTimerRef.current) {
+        clearTimeout(newOrderTimerRef.current);
+      }
     };
   }, []);
 
@@ -213,7 +231,24 @@ export default function StaffMainScreen({ store, onBack }) {
         (payload) => {
           if (!isMountedRef.current) return;
           if (payload.eventType === 'INSERT') {
-            if (soundEnabled) playChimeSound();
+            const newOrd = payload.new;
+            if (!newOrd?.restaurant_id || newOrd.restaurant_id === restaurantId) {
+              if (soundEnabled) playChimeSound();
+              const tableLabel = newOrd?.table_id ? `โต๊ะ ${newOrd.table_id}` : 'ลูกค้าหน้าร้าน';
+              setNewOrderBanner({
+                id: newOrd?.id || Date.now(),
+                tableLabel,
+                amount: Number(newOrd?.total_amount) || 0,
+              });
+              if (newOrderTimerRef.current) {
+                clearTimeout(newOrderTimerRef.current);
+              }
+              newOrderTimerRef.current = setTimeout(() => {
+                if (isMountedRef.current) {
+                  setNewOrderBanner(null);
+                }
+              }, 6000);
+            }
           }
           fetchOrders();
           fetchTables();
@@ -1212,22 +1247,66 @@ export default function StaffMainScreen({ store, onBack }) {
           </View>
         </View>
 
-        {/* ปุ่มเปิด/ปิดเสียงแจ้งเตือน */}
+        {/* ปุ่มเปิด/ปิดเสียงและสั่นแจ้งเตือน */}
         <TouchableOpacity
           style={[styles.soundBtn, soundEnabled ? styles.soundBtnOn : styles.soundBtnOff]}
-          onPress={() => setSoundEnabled(!soundEnabled)}
+          onPress={() => {
+            const nextState = !soundEnabled;
+            setSoundEnabled(nextState);
+            if (nextState) {
+              playChimeSound();
+            }
+          }}
           activeOpacity={0.8}
         >
           <Icon
-            name={soundEnabled ? 'volume-high-outline' : 'volume-mute-outline'}
+            name={soundEnabled ? 'notifications-outline' : 'notifications-off-outline'}
             size={15}
             color={soundEnabled ? colors.primaryDeep : colors.danger}
           />
           <Text style={[styles.soundBtnText, !soundEnabled && { color: colors.danger }]}>
-            {soundEnabled ? 'เสียงเปิด' : 'ปิดเสียง'}
+            {soundEnabled ? 'เตือนเปิด' : 'ปิดเตือน'}
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* แบนเนอร์แจ้งเตือนเมื่อมีออเดอร์ใหม่เข้ามาแบบ Realtime */}
+      {newOrderBanner && (
+        <View style={styles.newOrderBanner}>
+          <View style={styles.newOrderBannerLeft}>
+            <View style={styles.newOrderBannerIcon}>
+              <Icon name="notifications" size={18} color="#FFFFFF" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.newOrderBannerTitle}>
+                มีออเดอร์ใหม่เข้า! ({newOrderBanner.tableLabel})
+              </Text>
+              <Text style={styles.newOrderBannerSub}>
+                ยอดออเดอร์ ฿{Number(newOrderBanner.amount || 0).toLocaleString()} • แตะเพื่อดูในห้องครัว
+              </Text>
+            </View>
+          </View>
+          <View style={styles.newOrderBannerActions}>
+            <TouchableOpacity
+              style={styles.newOrderBannerViewBtn}
+              onPress={() => {
+                setActiveTab('kitchen');
+                setNewOrderBanner(null);
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.newOrderBannerViewText}>ดูออเดอร์</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.newOrderBannerCloseBtn}
+              onPress={() => setNewOrderBanner(null)}
+              activeOpacity={0.75}
+            >
+              <Icon name="close" size={16} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       {/* แถบ Tab หลัก 4 โหมด */}
       <View style={styles.tabBar}>
@@ -2804,6 +2883,60 @@ const styles = StyleSheet.create({
   soundBtnOn: { backgroundColor: colors.primarySoft },
   soundBtnOff: { backgroundColor: colors.dangerSoft },
   soundBtnText: { fontSize: 11, fontWeight: '700', color: colors.primaryDeep, marginLeft: 4 },
+  newOrderBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.primaryDeep,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.primary,
+  },
+  newOrderBannerLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  newOrderBannerIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  newOrderBannerTitle: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  newOrderBannerSub: {
+    color: '#D1FAE5',
+    fontSize: 11,
+    marginTop: 1,
+  },
+  newOrderBannerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  newOrderBannerViewBtn: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.sm,
+  },
+  newOrderBannerViewText: {
+    color: colors.primaryDeep,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  newOrderBannerCloseBtn: {
+    padding: 4,
+  },
 
   tabBar: {
     flexDirection: 'row',

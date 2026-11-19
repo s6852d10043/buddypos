@@ -418,13 +418,30 @@ export default function StaffLoginScreen({ onBack, onStaffLogin }) {
 
         img.src = selectedAsset.uri;
       } else {
+        let qrResult = null;
+        if (typeof Camera.scanFromURLAsync === 'function') {
+          try {
+            const scanResults = await Camera.scanFromURLAsync(selectedAsset.uri, ['qr']);
+            if (Array.isArray(scanResults) && scanResults.length > 0) {
+              qrResult = scanResults[0]?.data || scanResults[0]?.raw || null;
+            }
+          } catch (scanErr) {
+            console.warn('Camera.scanFromURLAsync error:', scanErr);
+          }
+        }
+
         if (isMountedRef.current) {
           setDecodingImage(false);
         }
-        showNotice(
-          'แจ้งเตือน',
-          'กรุณาใช้โหมดสแกนด้วยกล้อง หรือคัดลอกลิงก์มาวางในช่องใส่ลิงก์ร้านค้า'
-        );
+
+        if (qrResult) {
+          processStoreAccessData(qrResult);
+        } else {
+          showNotice(
+            'ไม่พบ QR Code ในรูปภาพ',
+            'ไม่สามารถตรวจจับ QR Code ในรูปภาพนี้ได้ กรุณาเลือกรูปที่เห็น QR Code ชัดเจน หรือใช้กล้องสแกน'
+          );
+        }
       }
     } catch (err) {
       console.error('Pick QR Image Error:', err);
@@ -754,7 +771,11 @@ export default function StaffLoginScreen({ onBack, onStaffLogin }) {
           {/* ส่วนหัวโลโก้ */}
           <View style={styles.brandHeader}>
             <View style={styles.brandLogoBox}>
-              <Icon name="restaurant-outline" size={34} color="#FFFFFF" />
+              <Image
+                source={require('../../assets/icon.png')}
+                style={styles.brandLogoImg}
+                resizeMode="cover"
+              />
             </View>
             <Text style={styles.brandTitle}>BuddyPOS</Text>
             <Text style={styles.brandSub}>เข้าสู่ระบบสำหรับพนักงานหน้าร้าน</Text>
@@ -848,14 +869,19 @@ const styles = StyleSheet.create({
     marginBottom: 22,
   },
   brandLogoBox: {
-    width: 66,
-    height: 66,
+    width: 72,
+    height: 72,
     borderRadius: 18,
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
     marginBottom: 12,
     ...shadow.raised,
+  },
+  brandLogoImg: {
+    width: '100%',
+    height: '100%',
   },
   brandTitle: {
     fontSize: 28,

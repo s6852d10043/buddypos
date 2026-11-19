@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Platform,
   ScrollView,
+  Image,
 } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import * as AuthSession from "expo-auth-session";
@@ -188,6 +189,7 @@ export default function LoginScreen({ role, onLoginSuccess, onBack }) {
 
           const accessToken = getParam(resUrl, "access_token");
           const refreshToken = getParam(resUrl, "refresh_token");
+          const authCode = getParam(resUrl, "code");
 
           if (accessToken && refreshToken) {
             const { data: sessionData, error: sessionError } =
@@ -199,6 +201,15 @@ export default function LoginScreen({ role, onLoginSuccess, onBack }) {
             if (sessionError) throw sessionError;
 
             if (onLoginSuccess && sessionData.user) {
+              return onLoginSuccess(sessionData.user);
+            }
+          } else if (authCode) {
+            const { data: sessionData, error: sessionError } =
+              await supabase.auth.exchangeCodeForSession(authCode);
+
+            if (sessionError) throw sessionError;
+
+            if (onLoginSuccess && sessionData?.user) {
               return onLoginSuccess(sessionData.user);
             }
           }
@@ -384,7 +395,11 @@ export default function LoginScreen({ role, onLoginSuccess, onBack }) {
           {/* ส่วนหัวโลโก้เหมือนหน้า RoleSelectScreen */}
           <View style={styles.brandHeader}>
             <View style={styles.brandLogoBox}>
-              <Icon name="restaurant-outline" size={36} color="#FFFFFF" />
+              <Image
+                source={require("../../assets/icon.png")}
+                style={styles.brandLogoImg}
+                resizeMode="cover"
+              />
             </View>
             <Text style={styles.brandTitle}>BuddyPOS</Text>
             <Text style={styles.brandSub}>
@@ -667,14 +682,19 @@ const styles = StyleSheet.create({
     marginBottom: 28,
   },
   brandLogoBox: {
-    width: 72,
-    height: 72,
+    width: 76,
+    height: 76,
     borderRadius: 20,
     backgroundColor: colors.primary,
     justifyContent: "center",
     alignItems: "center",
+    overflow: "hidden",
     marginBottom: 16,
     ...shadow.raised,
+  },
+  brandLogoImg: {
+    width: "100%",
+    height: "100%",
   },
   brandTitle: {
     fontSize: 30,
