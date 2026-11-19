@@ -211,6 +211,7 @@ export default function App() {
         let detectedToken = null;
         let detectedStaffToken = null;
         let detectedStaffStoreId = null;
+        let detectedStaffRole = null;
         let restoredRole = null;
         let restoredStore = null;
         let restoredView = "dashboard";
@@ -220,6 +221,7 @@ export default function App() {
           const urlParams = new URLSearchParams(window.location.search);
           const staffTokenParam = urlParams.get("staff_token");
           const storeIdParam = urlParams.get("store_id") || urlParams.get("restaurant_id");
+          const staffRoleParam = urlParams.get("staff_role");
           const tokenParam = urlParams.get("token") || urlParams.get("t");
           const modeParam = urlParams.get("mode");
           if (modeParam === "admin") {
@@ -227,6 +229,9 @@ export default function App() {
           } else if (staffTokenParam) {
             detectedStaffToken = staffTokenParam;
             detectedStaffStoreId = storeIdParam;
+            if (staffRoleParam === "kitchen" || staffRoleParam === "cashier") {
+              detectedStaffRole = staffRoleParam;
+            }
           } else if (tokenParam) {
             detectedToken = tokenParam;
             setCustomerToken(tokenParam);
@@ -271,9 +276,14 @@ export default function App() {
           }
           const staffMatch = initialUrl.match(/[?&]staff_token=([^&]+)/);
           const storeMatch = initialUrl.match(/[?&](?:store_id|restaurant_id)=([^&]+)/);
+          const staffRoleMatch = initialUrl.match(/[?&]staff_role=([^&]+)/);
           if (staffMatch) {
             detectedStaffToken = decodeURIComponent(staffMatch[1]);
             if (storeMatch) detectedStaffStoreId = decodeURIComponent(storeMatch[1]);
+            if (staffRoleMatch) {
+              const r = decodeURIComponent(staffRoleMatch[1]);
+              if (r === "kitchen" || r === "cashier") detectedStaffRole = r;
+            }
           } else {
             const match = initialUrl.match(/[?&](?:token|t)=([^&]+)/);
             if (match) {
@@ -297,7 +307,8 @@ export default function App() {
           }
           const { data: staffRest } = await staffQuery.maybeSingle();
 
-          handleSelectRole("staff");
+          const resolvedStaffRole = detectedStaffRole || "cashier";
+          handleSelectRole(resolvedStaffRole);
           if (staffRest && staffRest.status !== "suspended") {
             const staffStorePayload = {
               id: staffRest.id,
@@ -306,6 +317,7 @@ export default function App() {
               image_url: staffRest.image_url || null,
               staffToken: staffRest.staff_token,
               role: "staff",
+              staffRole: resolvedStaffRole,
               loginTime: new Date().toISOString(),
             };
             handleSelectActiveStore(staffStorePayload);
@@ -350,9 +362,18 @@ export default function App() {
               } else {
                 handleSelectActiveStore(null);
               }
-            } else if (restoredRole === "staff" && storeId && restoredStore.staffToken) {
+            } else if (
+              (restoredRole === "staff" || restoredRole === "cashier" || restoredRole === "kitchen") &&
+              storeId &&
+              restoredStore.staffToken
+            ) {
               // กู้คืนหน้าร้านสำหรับพนักงาน (StaffMainScreen จะตรวจสอบ staff_token และ status อีกชั้น)
-              setActiveStore(restoredStore);
+              setActiveStore({
+                ...restoredStore,
+                staffRole:
+                  restoredStore.staffRole ||
+                  (restoredRole === "kitchen" ? "kitchen" : "cashier"),
+              });
             }
           }
         }
@@ -491,21 +512,33 @@ export default function App() {
             ) : !selectedRole ? (
               <RoleSelectScreen
                 onSelectOwner={() => handleSelectRole("owner")}
-                onSelectStaff={() => handleSelectRole("staff")}
+                onSelectStaff={() => handleSelectRole("cashier")}
+                onSelectCashier={() => handleSelectRole("cashier")}
+                onSelectKitchen={() => handleSelectRole("kitchen")}
+                onSelectAdmin={() => setIsAdminMode(true)}
               />
-            ) : selectedRole === "staff" && !activeStore ? (
+            ) : (selectedRole === "staff" || selectedRole === "cashier" || selectedRole === "kitchen") && !activeStore ? (
               <StaffLoginScreen
+                staffRole={selectedRole === "kitchen" ? "kitchen" : "cashier"}
                 onBack={() => {
                   handleSelectRole(null);
                   handleSelectActiveStore(null);
                 }}
                 onStaffLogin={(storeObj) => {
+                  if (storeObj?.staffRole === "kitchen" || storeObj?.staffRole === "cashier") {
+                    handleSelectRole(storeObj.staffRole);
+                  }
                   handleSelectActiveStore(storeObj);
                 }}
               />
-            ) : selectedRole === "staff" && activeStore ? (
+            ) : (selectedRole === "staff" || selectedRole === "cashier" || selectedRole === "kitchen") && activeStore ? (
               <StaffMainScreen
-                store={activeStore}
+                store={{
+                  ...activeStore,
+                  staffRole:
+                    activeStore?.staffRole ||
+                    (selectedRole === "kitchen" ? "kitchen" : "cashier"),
+                }}
                 onBack={() => {
                   handleSelectActiveStore(null);
                 }}

@@ -21,7 +21,7 @@ import { supabase } from '../lib/supabase';
 import Icon from '../theme/Icon';
 import { colors, spacing, radius, fontSize, shadow } from '../theme';
 
-export default function StaffLoginScreen({ onBack, onStaffLogin }) {
+export default function StaffLoginScreen({ onBack, onStaffLogin, staffRole = 'cashier' }) {
   // โหมดการเข้าใช้งาน: 'scan' | 'image' | 'link'
   const [activeTab, setActiveTab] = useState('scan');
 
@@ -152,6 +152,7 @@ export default function StaffLoginScreen({ onBack, onStaffLogin }) {
           name: data.name || storeObj.name,
           image_url: data.image_url || storeObj.image_url || null,
           staffToken: data.staff_token,
+          staffRole: staffRole || storeObj.staffRole || 'cashier',
         });
       }
     } catch (err) {
@@ -203,6 +204,7 @@ export default function StaffLoginScreen({ onBack, onStaffLogin }) {
       let storeId = null;
       let token = null;
       let storeName = null;
+      let parsedStaffRole = null;
 
       if (clean.startsWith('http://') || clean.startsWith('https://')) {
         try {
@@ -213,11 +215,14 @@ export default function StaffLoginScreen({ onBack, onStaffLogin }) {
             urlObj.searchParams.get('id');
           token = urlObj.searchParams.get('staff_token') || urlObj.searchParams.get('token');
           storeName = urlObj.searchParams.get('store_name') || urlObj.searchParams.get('name');
+          parsedStaffRole = urlObj.searchParams.get('staff_role');
         } catch {
           const matchStore = clean.match(/[?&](?:store_id|restaurant_id|id)=([^&]+)/);
           if (matchStore) storeId = decodeURIComponent(matchStore[1]);
           const matchToken = clean.match(/[?&](?:staff_token|token)=([^&]+)/);
           if (matchToken) token = decodeURIComponent(matchToken[1]);
+          const matchRole = clean.match(/[?&]staff_role=([^&]+)/);
+          if (matchRole) parsedStaffRole = decodeURIComponent(matchRole[1]);
         }
       } else if (clean.startsWith('{') && clean.endsWith('}')) {
         try {
@@ -225,6 +230,7 @@ export default function StaffLoginScreen({ onBack, onStaffLogin }) {
           storeId = parsed.store_id || parsed.restaurant_id || parsed.id;
           token = parsed.staff_token || parsed.token;
           storeName = parsed.store_name || parsed.name;
+          parsedStaffRole = parsed.staff_role;
         } catch (e) {}
       } else {
         token = clean;
@@ -281,6 +287,13 @@ export default function StaffLoginScreen({ onBack, onStaffLogin }) {
       const resolvedStoreName =
         verifiedRestaurant.name || storeName || 'ร้านค้า BuddyPOS (พนักงาน)';
 
+      const resolvedStaffRole =
+        parsedStaffRole === 'kitchen' || parsedStaffRole === 'cashier'
+          ? parsedStaffRole
+          : staffRole === 'kitchen'
+          ? 'kitchen'
+          : 'cashier';
+
       const storePayload = {
         id: verifiedRestaurant.id,
         restaurantId: verifiedRestaurant.id,
@@ -288,6 +301,7 @@ export default function StaffLoginScreen({ onBack, onStaffLogin }) {
         image_url: verifiedRestaurant.image_url || null,
         staffToken: verifiedRestaurant.staff_token,
         role: 'staff',
+        staffRole: resolvedStaffRole,
         loginTime: new Date().toISOString(),
       };
 
@@ -778,7 +792,11 @@ export default function StaffLoginScreen({ onBack, onStaffLogin }) {
               />
             </View>
             <Text style={styles.brandTitle}>BuddyPOS</Text>
-            <Text style={styles.brandSub}>เข้าสู่ระบบสำหรับพนักงานหน้าร้าน</Text>
+            <Text style={styles.brandSub}>
+              {staffRole === 'kitchen'
+                ? 'เข้าสู่ระบบสำหรับพนักงานครัว (Kitchen Staff)'
+                : 'เข้าสู่ระบบสำหรับพนักงานขาย / แคชเชียร์ (Cashier)'}
+            </Text>
           </View>
 
           {/* การ์ดหลัก: เนื้อหาโหมด + แท็บสลับโหมดอยู่ด้านล่างของการ์ด */}

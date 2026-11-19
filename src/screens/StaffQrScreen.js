@@ -42,12 +42,14 @@ export default function StaffQrScreen({ store, onBack }) {
   );
   const [storeLogoUrl, setStoreLogoUrl] = useState(store?.image_url || null);
 
-  const buildStaffLink = (token) => {
+  const [selectedQrRole, setSelectedQrRole] = useState('cashier'); // 'cashier' | 'kitchen'
+
+  const buildStaffLink = (token, roleType = selectedQrRole) => {
     const baseUrl =
       Platform.OS === 'web' && typeof window !== 'undefined'
         ? window.location.origin
         : 'https://buddypos-beta.vercel.app';
-    return `${baseUrl}?store_id=${restaurantId || ''}&staff_token=${token}`;
+    return `${baseUrl}?store_id=${restaurantId || ''}&staff_token=${token}&staff_role=${roleType}`;
   };
 
   const [staffToken, setStaffToken] = useState(null);
@@ -357,6 +359,86 @@ export default function StaffQrScreen({ store, onBack }) {
 
           <Text style={styles.mainTitle}>QR Code เข้าใช้งานพนักงาน</Text>
           <Text style={styles.subTitle}>ร้าน: {restaurantName}</Text>
+
+          {/* แถบเลือกประเภทสิทธิ์ QR พนักงาน (แคชเชียร์ vs พนักงานครัว) */}
+          <View
+            style={{
+              flexDirection: 'row',
+              backgroundColor: colors.surfaceSubtle,
+              borderRadius: radius.md,
+              padding: 4,
+              marginBottom: 16,
+              width: '100%',
+              borderWidth: 1,
+              borderColor: colors.border,
+            }}
+          >
+            <TouchableOpacity
+              style={{
+                flex: 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                paddingVertical: 10,
+                borderRadius: radius.sm,
+                backgroundColor: selectedQrRole === 'cashier' ? colors.primary : 'transparent',
+              }}
+              onPress={() => {
+                setSelectedQrRole('cashier');
+                if (staffToken) setQrUrl(buildStaffLink(staffToken, 'cashier'));
+              }}
+              activeOpacity={0.8}
+            >
+              <Icon
+                name="cash-outline"
+                size={16}
+                color={selectedQrRole === 'cashier' ? '#FFFFFF' : colors.textSecondary}
+              />
+              <Text
+                style={{
+                  marginLeft: 6,
+                  fontSize: 13,
+                  fontWeight: '700',
+                  color: selectedQrRole === 'cashier' ? '#FFFFFF' : colors.textSecondary,
+                }}
+              >
+                QR แคชเชียร์
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={{
+                flex: 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                paddingVertical: 10,
+                borderRadius: radius.sm,
+                backgroundColor: selectedQrRole === 'kitchen' ? colors.warning : 'transparent',
+              }}
+              onPress={() => {
+                setSelectedQrRole('kitchen');
+                if (staffToken) setQrUrl(buildStaffLink(staffToken, 'kitchen'));
+              }}
+              activeOpacity={0.8}
+            >
+              <Icon
+                name="flame-outline"
+                size={16}
+                color={selectedQrRole === 'kitchen' ? '#FFFFFF' : colors.textSecondary}
+              />
+              <Text
+                style={{
+                  marginLeft: 6,
+                  fontSize: 13,
+                  fontWeight: '700',
+                  color: selectedQrRole === 'kitchen' ? '#FFFFFF' : colors.textSecondary,
+                }}
+              >
+                QR พนักงานครัว
+              </Text>
+            </TouchableOpacity>
+          </View>
 
           {/* กรอบแสดง QR Code */}
           <View style={styles.qrContainer}>

@@ -78,9 +78,16 @@ const playChimeSound = () => {
 export default function StaffMainScreen({ store, onBack }) {
   const restaurantId = store?.restaurantId || store?.id;
   const restaurantName = store?.restaurantName || store?.name || 'ร้านค้าของคุณ';
+  const staffRole = store?.staffRole === 'kitchen' ? 'kitchen' : 'cashier';
+  const isKitchenRole = staffRole === 'kitchen';
+  const isCashierRole = staffRole === 'cashier';
 
-  // แท็บหลักของพนักงาน: 'kitchen' (ครัว) | 'cashier' (แคชเชียร์) | 'take_order' (รับออเดอร์) | 'tables' (ผังโต๊ะ)
-  const [activeTab, setActiveTab] = useState('kitchen');
+  // แท็บหลักของพนักงาน: แยกตามสิทธิ์ ('kitchen' สำหรับพนักงานครัว | 'cashier', 'take_order', 'tables' สำหรับแคชเชียร์)
+  const [activeTab, setActiveTab] = useState(isKitchenRole ? 'kitchen' : 'cashier');
+
+  useEffect(() => {
+    setActiveTab(isKitchenRole ? 'kitchen' : 'cashier');
+  }, [isKitchenRole]);
 
   // ข้อมูลหลัก
   const [tables, setTables] = useState([]);
@@ -1242,8 +1249,22 @@ export default function StaffMainScreen({ store, onBack }) {
             {restaurantName}
           </Text>
           <View style={styles.roleBadge}>
-            <View style={styles.greenPulseDot} />
-            <Text style={styles.roleBadgeText}>โหมดพนักงานหน้าร้าน (Staff Mode)</Text>
+            <View
+              style={[
+                styles.greenPulseDot,
+                isKitchenRole && { backgroundColor: colors.warning },
+              ]}
+            />
+            <Text
+              style={[
+                styles.roleBadgeText,
+                isKitchenRole && { color: colors.warning },
+              ]}
+            >
+              {isKitchenRole
+                ? 'โหมดพนักงานครัว (Kitchen Staff)'
+                : 'โหมดพนักงานขาย / แคชเชียร์ (Cashier)'}
+            </Text>
           </View>
         </View>
 
@@ -1282,7 +1303,8 @@ export default function StaffMainScreen({ store, onBack }) {
                 มีออเดอร์ใหม่เข้า! ({newOrderBanner.tableLabel})
               </Text>
               <Text style={styles.newOrderBannerSub}>
-                ยอดออเดอร์ ฿{Number(newOrderBanner.amount || 0).toLocaleString()} • แตะเพื่อดูในห้องครัว
+                ยอดออเดอร์ ฿{Number(newOrderBanner.amount || 0).toLocaleString()} •{' '}
+                {isKitchenRole ? 'แตะเพื่อดูคิวในห้องครัว' : 'แตะเพื่อดูรายการออเดอร์'}
               </Text>
             </View>
           </View>
@@ -1290,7 +1312,7 @@ export default function StaffMainScreen({ store, onBack }) {
             <TouchableOpacity
               style={styles.newOrderBannerViewBtn}
               onPress={() => {
-                setActiveTab('kitchen');
+                setActiveTab(isKitchenRole ? 'kitchen' : 'cashier');
                 setNewOrderBanner(null);
               }}
               activeOpacity={0.85}
@@ -1308,75 +1330,81 @@ export default function StaffMainScreen({ store, onBack }) {
         </View>
       )}
 
-      {/* แถบ Tab หลัก 4 โหมด */}
+      {/* แถบ Tab หลัก แยกตามสิทธิ์บทบาท (พนักงานครัว vs แคชเชียร์) */}
       <View style={styles.tabBar}>
-        <TouchableOpacity
-          style={[styles.tabItem, activeTab === 'kitchen' && styles.tabItemActive]}
-          onPress={() => setActiveTab('kitchen')}
-        >
-          <Icon
-            name="flame-outline"
-            size={18}
-            color={activeTab === 'kitchen' ? colors.primary : colors.textMuted}
-          />
-          <Text style={[styles.tabLabel, activeTab === 'kitchen' && styles.tabLabelActive]}>
-            ห้องครัว
-          </Text>
-          {orders.filter((o) => o.status === 'pending' || o.status === 'cooking').length > 0 && (
-            <View style={styles.badgeCount}>
-              <Text style={styles.badgeCountText}>
-                {orders.filter((o) => o.status === 'pending' || o.status === 'cooking').length}
+        {isKitchenRole && (
+          <TouchableOpacity
+            style={[styles.tabItem, activeTab === 'kitchen' && styles.tabItemActive]}
+            onPress={() => setActiveTab('kitchen')}
+          >
+            <Icon
+              name="flame-outline"
+              size={18}
+              color={activeTab === 'kitchen' ? colors.primary : colors.textMuted}
+            />
+            <Text style={[styles.tabLabel, activeTab === 'kitchen' && styles.tabLabelActive]}>
+              ห้องครัว (คิวทำอาหาร)
+            </Text>
+            {orders.filter((o) => o.status === 'pending' || o.status === 'cooking').length > 0 && (
+              <View style={styles.badgeCount}>
+                <Text style={styles.badgeCountText}>
+                  {orders.filter((o) => o.status === 'pending' || o.status === 'cooking').length}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        )}
+
+        {isCashierRole && (
+          <>
+            <TouchableOpacity
+              style={[styles.tabItem, activeTab === 'cashier' && styles.tabItemActive]}
+              onPress={() => setActiveTab('cashier')}
+            >
+              <Icon
+                name="cash-outline"
+                size={18}
+                color={activeTab === 'cashier' ? colors.primary : colors.textMuted}
+              />
+              <Text style={[styles.tabLabel, activeTab === 'cashier' && styles.tabLabelActive]}>
+                แคชเชียร์
               </Text>
-            </View>
-          )}
-        </TouchableOpacity>
+              {cashierTableBills.length > 0 && (
+                <View style={[styles.badgeCount, { backgroundColor: colors.info }]}>
+                  <Text style={styles.badgeCountText}>{cashierTableBills.length}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.tabItem, activeTab === 'cashier' && styles.tabItemActive]}
-          onPress={() => setActiveTab('cashier')}
-        >
-          <Icon
-            name="cash-outline"
-            size={18}
-            color={activeTab === 'cashier' ? colors.primary : colors.textMuted}
-          />
-          <Text style={[styles.tabLabel, activeTab === 'cashier' && styles.tabLabelActive]}>
-            แคชเชียร์
-          </Text>
-          {cashierTableBills.length > 0 && (
-            <View style={[styles.badgeCount, { backgroundColor: colors.info }]}>
-              <Text style={styles.badgeCountText}>{cashierTableBills.length}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tabItem, activeTab === 'take_order' && styles.tabItemActive]}
+              onPress={() => setActiveTab('take_order')}
+            >
+              <Icon
+                name="create-outline"
+                size={18}
+                color={activeTab === 'take_order' ? colors.primary : colors.textMuted}
+              />
+              <Text style={[styles.tabLabel, activeTab === 'take_order' && styles.tabLabelActive]}>
+                รับออเดอร์
+              </Text>
+            </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.tabItem, activeTab === 'take_order' && styles.tabItemActive]}
-          onPress={() => setActiveTab('take_order')}
-        >
-          <Icon
-            name="create-outline"
-            size={18}
-            color={activeTab === 'take_order' ? colors.primary : colors.textMuted}
-          />
-          <Text style={[styles.tabLabel, activeTab === 'take_order' && styles.tabLabelActive]}>
-            รับออเดอร์
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tabItem, activeTab === 'tables' && styles.tabItemActive]}
-          onPress={() => setActiveTab('tables')}
-        >
-          <Icon
-            name="grid-outline"
-            size={18}
-            color={activeTab === 'tables' ? colors.primary : colors.textMuted}
-          />
-          <Text style={[styles.tabLabel, activeTab === 'tables' && styles.tabLabelActive]}>
-            ผังโต๊ะ
-          </Text>
-        </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tabItem, activeTab === 'tables' && styles.tabItemActive]}
+              onPress={() => setActiveTab('tables')}
+            >
+              <Icon
+                name="grid-outline"
+                size={18}
+                color={activeTab === 'tables' ? colors.primary : colors.textMuted}
+              />
+              <Text style={[styles.tabLabel, activeTab === 'tables' && styles.tabLabelActive]}>
+                ผังโต๊ะ
+              </Text>
+            </TouchableOpacity>
+          </>
+        )}
       </View>
 
       {loading ? (

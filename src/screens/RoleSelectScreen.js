@@ -3,7 +3,13 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image } from 'rea
 import Icon from '../theme/Icon';
 import { colors, spacing, radius, fontSize, shadow } from '../theme';
 
-export default function RoleSelectScreen({ onSelectOwner, onSelectStaff }) {
+export default function RoleSelectScreen({
+  onSelectOwner,
+  onSelectStaff,
+  onSelectCashier,
+  onSelectKitchen,
+  onSelectAdmin,
+}) {
   return (
     <ScrollView
       style={styles.container}
@@ -23,7 +29,7 @@ export default function RoleSelectScreen({ onSelectOwner, onSelectStaff }) {
           <Text style={styles.appSub}>ระบบจัดการร้านอาหารอัจฉริยะ</Text>
         </View>
 
-        {/* ส่วนการ์ดเลือกบทบาท (จัดไอคอนและข้อความกึ่งกลาง) */}
+        {/* ส่วนการ์ดเลือกบทบาท (แยกสิทธิ์ชัดเจนตามโครงสร้าง 5 บทบาท) */}
         <View style={styles.cardsContainer}>
           {/* การ์ดเจ้าของร้าน */}
           <TouchableOpacity
@@ -35,21 +41,53 @@ export default function RoleSelectScreen({ onSelectOwner, onSelectStaff }) {
               <Icon name="storefront-outline" size={28} color={colors.primary} />
             </View>
             <Text style={styles.cardTitle}>เจ้าของร้าน (Owner)</Text>
-            <Text style={styles.cardSub}>จัดการร้าน เมนูอาหาร และดูยอดขาย</Text>
+            <Text style={styles.cardSub}>จัดการร้าน เมนูอาหาร และดูรายงานการเงิน</Text>
           </TouchableOpacity>
 
-          {/* การ์ดพนักงาน */}
+          {/* การ์ดพนักงานขาย / แคชเชียร์ */}
           <TouchableOpacity
             style={styles.card}
-            onPress={onSelectStaff}
+            onPress={onSelectCashier || onSelectStaff}
             activeOpacity={0.85}
           >
             <View style={[styles.iconCircle, { backgroundColor: colors.infoSoft }]}>
-              <Icon name="people-outline" size={28} color={colors.info} />
+              <Icon name="cash-outline" size={28} color={colors.info} />
             </View>
-            <Text style={styles.cardTitle}>พนักงาน / แคชเชียร์ / ครัว</Text>
-            <Text style={styles.cardSub}>สแกน QR หรือใส่รหัสร้านเพื่อรับออเดอร์</Text>
+            <Text style={styles.cardTitle}>พนักงานขาย / แคชเชียร์ (Cashier)</Text>
+            <Text style={styles.cardSub}>รับออเดอร์ เสิร์ฟอาหาร คิดเงิน และจัดการผังโต๊ะ</Text>
           </TouchableOpacity>
+
+          {/* การ์ดพนักงานครัว */}
+          <TouchableOpacity
+            style={styles.card}
+            onPress={onSelectKitchen || onSelectStaff}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.iconCircle, { backgroundColor: colors.warningSoft }]}>
+              <Icon name="flame-outline" size={28} color={colors.warning} />
+            </View>
+            <Text style={styles.cardTitle}>พนักงานครัว (Kitchen Staff)</Text>
+            <Text style={styles.cardSub}>รับออเดอร์เข้าครัว อัปเดตสถานะกำลังปรุงและพร้อมเสิร์ฟ</Text>
+          </TouchableOpacity>
+
+          {/* ปุ่มเข้าสู่ระบบผู้ดูแลระบบกลาง (Admin Console) */}
+          {onSelectAdmin && (
+            <TouchableOpacity
+              style={[styles.card, { paddingVertical: 18, backgroundColor: colors.surfaceSubtle }]}
+              onPress={onSelectAdmin}
+              activeOpacity={0.85}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Icon name="shield-checkmark-outline" size={20} color={colors.primaryDeep} />
+                <Text style={[styles.cardTitle, { fontSize: 15 }]}>
+                  ผู้ดูแลระบบกลาง (Admin Console)
+                </Text>
+              </View>
+              <Text style={[styles.cardSub, { fontSize: 12, marginTop: 4 }]}>
+                ดูแลตั้งค่าระบบกลาง ตรวจสอบร้านค้า และจัดการสิทธิ์ผู้ใช้งาน
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </ScrollView>
