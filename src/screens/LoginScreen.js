@@ -143,9 +143,14 @@ export default function LoginScreen({ role, onLoginSuccess, onBack }) {
       if (isMountedRef.current) setGoogleLoading(true);
 
       if (Platform.OS === "web") {
+        const isWebAdminPath =
+          window.location.pathname === "/admin" ||
+          window.location.pathname.startsWith("/admin/");
         const targetRedirect =
           role === "super_admin"
-            ? `${window.location.origin}${window.location.pathname}?mode=admin`
+            ? isWebAdminPath
+              ? `${window.location.origin}/admin`
+              : `${window.location.origin}${window.location.pathname}?mode=admin`
             : window.location.origin;
         const { error } = await supabase.auth.signInWithOAuth({
           provider: "google",
@@ -374,17 +379,21 @@ export default function LoginScreen({ role, onLoginSuccess, onBack }) {
 
   return (
     <View style={styles.root}>
-      {/* แถบด้านบนสำหรับวางปุ่มย้อนกลับไว้มุมซ้ายบน */}
-      <View style={styles.topBar}>
-        <TouchableOpacity
-          style={styles.topLeftBackBtn}
-          onPress={onBack}
-          activeOpacity={0.75}
-        >
-          <Icon name="chevron-back" size={18} color={colors.textSecondary} />
-          <Text style={styles.topLeftBackText}>ย้อนกลับ</Text>
-        </TouchableOpacity>
-      </View>
+      {/* แถบด้านบนสำหรับวางปุ่มย้อนกลับไว้มุมซ้ายบน (ซ่อนในโหมดเว็บแอดมินแยก) */}
+      {onBack && role !== "super_admin" ? (
+        <View style={styles.topBar}>
+          <TouchableOpacity
+            style={styles.topLeftBackBtn}
+            onPress={onBack}
+            activeOpacity={0.75}
+          >
+            <Icon name="chevron-back" size={18} color={colors.textSecondary} />
+            <Text style={styles.topLeftBackText}>ย้อนกลับ</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={{ height: 24 }} />
+      )}
 
       <ScrollView
         style={styles.container}
@@ -401,17 +410,26 @@ export default function LoginScreen({ role, onLoginSuccess, onBack }) {
                 resizeMode="cover"
               />
             </View>
-            <Text style={styles.brandTitle}>BuddyPOS</Text>
+            <Text style={styles.brandTitle}>
+              {role === "super_admin" ? "BuddyPOS Admin" : "BuddyPOS"}
+            </Text>
             <Text style={styles.brandSub}>
               {role === "super_admin"
-                ? "ศูนย์ควบคุมผู้ดูแลระบบกลาง (Super Admin Console)"
+                ? "เว็บระบบผู้ดูแลระบบกลางแยกเฉพาะ (Super Admin Web Portal)"
                 : "ระบบจัดการร้านอาหารสำหรับเจ้าของร้าน"}
             </Text>
           </View>
 
           {/* การ์ดฟอร์ม */}
           <View style={styles.card}>
-            {mode !== "forgot" ? (
+            {role === "super_admin" && mode !== "forgot" ? (
+              <View style={styles.forgotHeaderBox}>
+                <Text style={styles.forgotHeaderTitle}>เข้าสู่ระบบผู้ดูแลระบบกลาง</Text>
+                <Text style={styles.forgotHeaderSub}>
+                  เฉพาะบัญชีที่ได้รับสิทธิ์ Super Admin เท่านั้น
+                </Text>
+              </View>
+            ) : mode !== "forgot" ? (
               <View style={styles.segmentedBar}>
                 <TouchableOpacity
                   style={[styles.segmentBtn, mode === "login" && styles.segmentBtnActive]}

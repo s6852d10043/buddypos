@@ -8,7 +8,6 @@ export default function RoleSelectScreen({
   onSelectStaff,
   onSelectCashier,
   onSelectKitchen,
-  onSelectAdmin,
 }) {
   return (
     <ScrollView
@@ -69,25 +68,6 @@ export default function RoleSelectScreen({
             <Text style={styles.cardTitle}>พนักงานครัว (Kitchen Staff)</Text>
             <Text style={styles.cardSub}>รับออเดอร์เข้าครัว อัปเดตสถานะกำลังปรุงและพร้อมเสิร์ฟ</Text>
           </TouchableOpacity>
-
-          {/* ปุ่มเข้าสู่ระบบผู้ดูแลระบบกลาง (Admin Console) */}
-          {onSelectAdmin && (
-            <TouchableOpacity
-              style={[styles.card, { paddingVertical: 18, backgroundColor: colors.surfaceSubtle }]}
-              onPress={onSelectAdmin}
-              activeOpacity={0.85}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <Icon name="shield-checkmark-outline" size={20} color={colors.primaryDeep} />
-                <Text style={[styles.cardTitle, { fontSize: 15 }]}>
-                  ผู้ดูแลระบบกลาง (Admin Console)
-                </Text>
-              </View>
-              <Text style={[styles.cardSub, { fontSize: 12, marginTop: 4 }]}>
-                ดูแลตั้งค่าระบบกลาง ตรวจสอบร้านค้า และจัดการสิทธิ์ผู้ใช้งาน
-              </Text>
-            </TouchableOpacity>
-          )}
         </View>
       </View>
     </ScrollView>

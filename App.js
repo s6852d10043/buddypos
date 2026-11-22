@@ -216,7 +216,7 @@ export default function App() {
         let restoredStore = null;
         let restoredView = "dashboard";
 
-        // 1. ตรวจสอบว่าเปิดผ่านลิงก์พนักงาน (?staff_token=...), ลิงก์โต๊ะอาหาร (?token=...), หรือลิงก์แอดมินกลาง (?mode=admin)
+        // 1. ตรวจสอบว่าเปิดผ่านเว็บแอดมินแยกต่างหาก (/admin หรือ ?mode=admin บน Web เท่านั้น), ลิงก์พนักงาน (?staff_token=...), หรือลิงก์โต๊ะอาหาร (?token=...)
         if (Platform.OS === "web" && typeof window !== "undefined") {
           const urlParams = new URLSearchParams(window.location.search);
           const staffTokenParam = urlParams.get("staff_token");
@@ -224,7 +224,10 @@ export default function App() {
           const staffRoleParam = urlParams.get("staff_role");
           const tokenParam = urlParams.get("token") || urlParams.get("t");
           const modeParam = urlParams.get("mode");
-          if (modeParam === "admin") {
+          const isWebAdminPath =
+            window.location.pathname === "/admin" ||
+            window.location.pathname.startsWith("/admin/");
+          if (modeParam === "admin" || isWebAdminPath) {
             setIsAdminMode(true);
           } else if (staffTokenParam) {
             detectedStaffToken = staffTokenParam;
@@ -250,8 +253,10 @@ export default function App() {
 
           if (window.location.hash || window.location.search.includes("code=") || window.location.search.includes("type=recovery")) {
             await parseAndSetSession(window.location.href);
-            if (!tokenParam && modeParam !== "admin") {
+            if (!tokenParam && modeParam !== "admin" && !isWebAdminPath) {
               window.history.replaceState(null, "", window.location.pathname);
+            } else if (isWebAdminPath) {
+              window.history.replaceState(null, "", "/admin");
             } else if (modeParam === "admin") {
               window.history.replaceState(null, "", `${window.location.pathname}?mode=admin`);
             }
@@ -271,7 +276,7 @@ export default function App() {
 
         const initialUrl = await Linking.getInitialURL();
         if (initialUrl) {
-          if (/[?&]mode=admin(?:&|$)/.test(initialUrl)) {
+          if (Platform.OS === "web" && (/[?&]mode=admin(?:&|$)/.test(initialUrl) || /\/admin(?:\/|\?|$)/.test(initialUrl))) {
             setIsAdminMode(true);
           }
           const staffMatch = initialUrl.match(/[?&]staff_token=([^&]+)/);
@@ -466,14 +471,14 @@ export default function App() {
 
           {/* ส่วนเนื้อหาหลัก */}
           <View style={styles.container}>
-            {isAdminMode ? (
+            {Platform.OS === "web" && isAdminMode ? (
               session && session.user ? (
                 <SuperAdminScreen
                   session={session}
                   onExitAdminMode={() => {
                     setIsAdminMode(false);
                     if (Platform.OS === "web" && typeof window !== "undefined") {
-                      window.history.replaceState(null, "", window.location.pathname);
+                      window.history.replaceState(null, "", "/");
                     }
                   }}
                   onLogout={async () => {
@@ -483,12 +488,6 @@ export default function App() {
               ) : (
                 <LoginScreen
                   role="super_admin"
-                  onBack={() => {
-                    setIsAdminMode(false);
-                    if (Platform.OS === "web" && typeof window !== "undefined") {
-                      window.history.replaceState(null, "", window.location.pathname);
-                    }
-                  }}
                   onLoginSuccess={(user) => console.log("Super Admin logged in:", user?.email)}
                 />
               )
@@ -515,7 +514,6 @@ export default function App() {
                 onSelectStaff={() => handleSelectRole("cashier")}
                 onSelectCashier={() => handleSelectRole("cashier")}
                 onSelectKitchen={() => handleSelectRole("kitchen")}
-                onSelectAdmin={() => setIsAdminMode(true)}
               />
             ) : (selectedRole === "staff" || selectedRole === "cashier" || selectedRole === "kitchen") && !activeStore ? (
               <StaffLoginScreen
