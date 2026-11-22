@@ -143,6 +143,49 @@ export default function LoginScreen({ role, onLoginSuccess, onBack }) {
       if (isMountedRef.current) setGoogleLoading(true);
 
       if (Platform.OS === "web") {
+        const googleClientId =
+          "557162360041-01pdm14s1kg25pl4qbc4o0qo2lde58o4.apps.googleusercontent.com";
+        const isOriginSupported =
+          window.location.origin === "https://buddypos-beta.vercel.app" ||
+          window.location.origin === "http://localhost:8081";
+
+        if (isOriginSupported && window.crypto?.subtle) {
+          const rawBytes = new Uint8Array(16);
+          window.crypto.getRandomValues(rawBytes);
+          const rawNonce = Array.from(rawBytes, (b) => b.toString(16).padStart(2, "0")).join("");
+          const hashBuf = await window.crypto.subtle.digest(
+            "SHA-256",
+            new TextEncoder().encode(rawNonce)
+          );
+          const hashedNonce = Array.from(new Uint8Array(hashBuf), (b) =>
+            b.toString(16).padStart(2, "0")
+          ).join("");
+
+          localStorage.setItem("buddypos_google_nonce", rawNonce);
+          if (role === "super_admin") {
+            localStorage.setItem("buddypos_google_admin", "1");
+          } else {
+            localStorage.removeItem("buddypos_google_admin");
+          }
+
+          const redirectUri =
+            role === "super_admin"
+              ? `${window.location.origin}/admin`
+              : window.location.origin;
+
+          const googleAuthUrl =
+            `https://accounts.google.com/o/oauth2/v2/auth` +
+            `?client_id=${encodeURIComponent(googleClientId)}` +
+            `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+            `&response_type=id_token` +
+            `&scope=${encodeURIComponent("openid email profile")}` +
+            `&nonce=${encodeURIComponent(hashedNonce)}` +
+            `&prompt=select_account`;
+
+          window.location.assign(googleAuthUrl);
+          return;
+        }
+
         const isWebAdminPath =
           window.location.pathname === "/admin" ||
           window.location.pathname.startsWith("/admin/");

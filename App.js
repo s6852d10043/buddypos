@@ -173,13 +173,37 @@ export default function App() {
     const accessToken = getParam(urlStr, "access_token");
     const refreshToken = getParam(urlStr, "refresh_token");
     const authCode = getParam(urlStr, "code");
+    const idToken = getParam(urlStr, "id_token");
 
     if (type === "recovery") {
       setIsResettingPassword(true);
       handleSelectRole("owner");
     }
 
-    if (accessToken && refreshToken) {
+    if (idToken) {
+      try {
+        let savedNonce = undefined;
+        if (Platform.OS === "web" && typeof window !== "undefined") {
+          savedNonce = localStorage.getItem("buddypos_google_nonce") || undefined;
+          localStorage.removeItem("buddypos_google_nonce");
+          if (localStorage.getItem("buddypos_google_admin") === "1") {
+            localStorage.removeItem("buddypos_google_admin");
+            setIsAdminMode(true);
+          }
+        }
+        const { data, error } = await supabase.auth.signInWithIdToken({
+          provider: "google",
+          token: idToken,
+          nonce: savedNonce,
+        });
+        if (!error && data?.session) {
+          setSession(data.session);
+          if (!selectedRole) handleSelectRole("owner");
+        }
+      } catch (err) {
+        console.error("Sign in with Google ID token error:", err);
+      }
+    } else if (accessToken && refreshToken) {
       try {
         const { data, error } = await supabase.auth.setSession({
           access_token: accessToken,
