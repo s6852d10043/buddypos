@@ -174,6 +174,20 @@ export default function App() {
     const refreshToken = getParam(urlStr, "refresh_token");
     const authCode = getParam(urlStr, "code");
     const idToken = getParam(urlStr, "id_token");
+    const oauthState = getParam(urlStr, "state");
+
+    // กรณีล็อกอิน Google จากแอปมือถือ Android (.apk) ที่วิ่งกลับมาที่เว็บหลัก ให้ส่งต่อไปยัง Deep Link ของแอปทันที
+    if (
+      Platform.OS === "web" &&
+      typeof window !== "undefined" &&
+      oauthState &&
+      oauthState.startsWith("native_app_") &&
+      idToken
+    ) {
+      const deepLinkUrl = `buddypos://auth/callback#id_token=${encodeURIComponent(idToken)}&state=${encodeURIComponent(oauthState)}`;
+      window.location.replace(deepLinkUrl);
+      return;
+    }
 
     if (type === "recovery") {
       setIsResettingPassword(true);

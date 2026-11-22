@@ -20,6 +20,89 @@ import { colors, spacing, radius, fontSize, shadow } from "../theme";
 
 WebBrowser.maybeCompleteAuthSession();
 
+const GOOGLE_WEB_CLIENT_ID =
+  "557162360041-01pdm14s1kg25pl4qbc4o0qo2lde58o4.apps.googleusercontent.com";
+const PRODUCTION_WEB_ORIGIN = "https://buddypos-beta.vercel.app";
+
+// Pure-JS SHA-256 (ทำงานได้ทั้งบน Web และ Android Hermes โดยไม่ต้องพึ่ง WebCrypto)
+const sha256Hex = (ascii) => {
+  const rightRotate = (value, amount) => (value >>> amount) | (value << (32 - amount));
+  const mathPow = Math.pow;
+  const maxWord = mathPow(2, 32);
+  let result = "";
+  const words = [];
+  const asciiBitLength = ascii.length * 8;
+  let hash = [];
+  const k = [];
+  let primeCounter = 0;
+  const isComposite = {};
+  for (let candidate = 2; primeCounter < 64; candidate++) {
+    if (!isComposite[candidate]) {
+      for (let i = 0; i < 313; i += candidate) {
+        isComposite[i] = candidate;
+      }
+      hash[primeCounter] = (mathPow(candidate, 0.5) * maxWord) | 0;
+      k[primeCounter++] = (mathPow(candidate, 1 / 3) * maxWord) | 0;
+    }
+  }
+  ascii += "\x80";
+  while ((ascii.length % 64) - 56) ascii += "\x00";
+  for (let i = 0; i < ascii.length; i++) {
+    const j = ascii.charCodeAt(i);
+    if (j >> 8) return "";
+    words[i >> 2] |= j << (((3 - i) % 4) * 8);
+  }
+  words[words.length] = (asciiBitLength / maxWord) | 0;
+  words[words.length] = asciiBitLength;
+  for (let j = 0; j < words.length; ) {
+    const w = words.slice(j, (j += 16));
+    const oldHash = hash;
+    hash = hash.slice(0, 8);
+    for (let i = 0; i < 64; i++) {
+      const w15 = w[i - 15];
+      const w2 = w[i - 2];
+      const a = hash[0];
+      const e = hash[4];
+      const temp1 =
+        hash[7] +
+        (rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25)) +
+        ((e & hash[5]) ^ (~e & hash[6])) +
+        k[i] +
+        (w[i] =
+          i < 16
+            ? w[i]
+            : (w[i - 16] +
+                (rightRotate(w15, 7) ^ rightRotate(w15, 18) ^ (w15 >>> 3)) +
+                w[i - 7] +
+                (rightRotate(w2, 17) ^ rightRotate(w2, 19) ^ (w2 >>> 10))) |
+              0);
+      const temp2 =
+        (rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22)) +
+        ((a & hash[1]) ^ (a & hash[2]) ^ (hash[1] & hash[2]));
+      hash = [(temp1 + temp2) | 0].concat(hash);
+      hash[4] = (hash[4] + temp1) | 0;
+    }
+    for (let i = 0; i < 8; i++) {
+      hash[i] = (hash[i] + oldHash[i]) | 0;
+    }
+  }
+  for (let i = 0; i < 8; i++) {
+    for (let j = 3; j + 1; j--) {
+      const b = (hash[i] >> (j * 8)) & 255;
+      result += (b < 16 ? 0 : "") + b.toString(16);
+    }
+  }
+  return result;
+};
+
+const generateRandomNonce = () => {
+  let s = "";
+  for (let i = 0; i < 32; i++) {
+    s += Math.floor(Math.random() * 16).toString(16);
+  }
+  return s;
+};
+
 const isValidEmail = (str) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str.trim());
 
 const getErrorMessageTH = (error) => {
@@ -143,23 +226,13 @@ export default function LoginScreen({ role, onLoginSuccess, onBack }) {
       if (isMountedRef.current) setGoogleLoading(true);
 
       if (Platform.OS === "web") {
-        const googleClientId =
-          "557162360041-01pdm14s1kg25pl4qbc4o0qo2lde58o4.apps.googleusercontent.com";
         const isOriginSupported =
-          window.location.origin === "https://buddypos-beta.vercel.app" ||
+          window.location.origin === PRODUCTION_WEB_ORIGIN ||
           window.location.origin === "http://localhost:8081";
 
-        if (isOriginSupported && window.crypto?.subtle) {
-          const rawBytes = new Uint8Array(16);
-          window.crypto.getRandomValues(rawBytes);
-          const rawNonce = Array.from(rawBytes, (b) => b.toString(16).padStart(2, "0")).join("");
-          const hashBuf = await window.crypto.subtle.digest(
-            "SHA-256",
-            new TextEncoder().encode(rawNonce)
-          );
-          const hashedNonce = Array.from(new Uint8Array(hashBuf), (b) =>
-            b.toString(16).padStart(2, "0")
-          ).join("");
+        if (isOriginSupported) {
+          const rawNonce = generateRandomNonce();
+          const hashedNonce = sha256Hex(rawNonce);
 
           localStorage.setItem("buddypos_google_nonce", rawNonce);
           if (role === "super_admin") {
@@ -175,7 +248,7 @@ export default function LoginScreen({ role, onLoginSuccess, onBack }) {
 
           const googleAuthUrl =
             `https://accounts.google.com/o/oauth2/v2/auth` +
-            `?client_id=${encodeURIComponent(googleClientId)}` +
+            `?client_id=${encodeURIComponent(GOOGLE_WEB_CLIENT_ID)}` +
             `&redirect_uri=${encodeURIComponent(redirectUri)}` +
             `&response_type=id_token` +
             `&scope=${encodeURIComponent("openid email profile")}` +
@@ -204,26 +277,28 @@ export default function LoginScreen({ role, onLoginSuccess, onBack }) {
         });
         if (error) throw error;
       } else {
-        const redirectUrl = AuthSession.makeRedirectUri({
+        const appReturnUrl = AuthSession.makeRedirectUri({
           scheme: "buddypos",
           path: "auth/callback",
         });
 
-        const { data, error } = await supabase.auth.signInWithOAuth({
-          provider: "google",
-          options: {
-            redirectTo: redirectUrl,
-            skipBrowserRedirect: true,
-            queryParams: { prompt: "select_account" },
-          },
-        });
+        const rawNonce = generateRandomNonce();
+        const hashedNonce = sha256Hex(rawNonce);
+        const stateTag = `native_app_${Date.now()}`;
 
-        if (error) throw error;
-        if (!data?.url) throw new Error("ไม่สามารถดึง Authentication URL ได้");
+        const googleAuthUrl =
+          `https://accounts.google.com/o/oauth2/v2/auth` +
+          `?client_id=${encodeURIComponent(GOOGLE_WEB_CLIENT_ID)}` +
+          `&redirect_uri=${encodeURIComponent(PRODUCTION_WEB_ORIGIN)}` +
+          `&response_type=id_token` +
+          `&scope=${encodeURIComponent("openid email profile")}` +
+          `&nonce=${encodeURIComponent(hashedNonce)}` +
+          `&state=${encodeURIComponent(stateTag)}` +
+          `&prompt=select_account`;
 
         const result = await WebBrowser.openAuthSessionAsync(
-          data.url,
-          redirectUrl,
+          googleAuthUrl,
+          appReturnUrl,
           { showInRecents: true }
         );
 
@@ -235,11 +310,25 @@ export default function LoginScreen({ role, onLoginSuccess, onBack }) {
             return match ? decodeURIComponent(match[1]) : null;
           };
 
+          const idToken = getParam(resUrl, "id_token");
           const accessToken = getParam(resUrl, "access_token");
           const refreshToken = getParam(resUrl, "refresh_token");
           const authCode = getParam(resUrl, "code");
 
-          if (accessToken && refreshToken) {
+          if (idToken) {
+            const { data: sessionData, error: sessionError } =
+              await supabase.auth.signInWithIdToken({
+                provider: "google",
+                token: idToken,
+                nonce: rawNonce,
+              });
+
+            if (sessionError) throw sessionError;
+
+            if (onLoginSuccess && sessionData?.user) {
+              return onLoginSuccess(sessionData.user);
+            }
+          } else if (accessToken && refreshToken) {
             const { data: sessionData, error: sessionError } =
               await supabase.auth.setSession({
                 access_token: accessToken,
