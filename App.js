@@ -290,13 +290,16 @@ export default function App() {
           restoredView = localStorage.getItem(STORAGE_DASHBOARD_VIEW_KEY) || "dashboard";
 
           if (window.location.hash || window.location.search.includes("code=") || window.location.search.includes("type=recovery")) {
+            const wasAdminRedirect = localStorage.getItem("buddypos_google_admin") === "1";
             await parseAndSetSession(window.location.href);
-            if (!tokenParam && modeParam !== "admin" && !isWebAdminPath) {
-              window.history.replaceState(null, "", window.location.pathname);
-            } else if (isWebAdminPath) {
+            if (isWebAdminPath || wasAdminRedirect) {
+              setIsAdminMode(true);
               window.history.replaceState(null, "", "/admin");
             } else if (modeParam === "admin") {
+              setIsAdminMode(true);
               window.history.replaceState(null, "", `${window.location.pathname}?mode=admin`);
+            } else if (!tokenParam) {
+              window.history.replaceState(null, "", window.location.pathname);
             }
           }
         } else {

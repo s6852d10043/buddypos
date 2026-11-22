@@ -241,10 +241,7 @@ export default function LoginScreen({ role, onLoginSuccess, onBack }) {
             localStorage.removeItem("buddypos_google_admin");
           }
 
-          const redirectUri =
-            role === "super_admin"
-              ? `${window.location.origin}/admin`
-              : window.location.origin;
+          const redirectUri = window.location.origin;
 
           const googleAuthUrl =
             `https://accounts.google.com/o/oauth2/v2/auth` +
